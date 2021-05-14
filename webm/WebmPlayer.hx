@@ -37,11 +37,19 @@ class WebmPlayer extends Bitmap
 	var lastRequestedVideoFrame = 0.0;
 	var playing = false;
 	var renderedCount = 0;
-
-	public function new(io:WebmIo, soundEnabled:Bool = true)
+	var renderedCount2 = 0;
+	var lastDecodedVideoFrame2 = 0.0;
+	var fkingElapsed = 0.0;
+	var wasHitOnce = false;
+	
+	public function new()
 	{
-		super(null);
-		
+	super(null);
+	}
+
+	public function fuck(io:WebmIo, soundEnabled:Bool = true):Void
+	{
+		wasHitOnce = false;
 		this.soundEnabled = soundEnabled;
 
 		if (BLANK_BYTES == null)
@@ -104,6 +112,17 @@ class WebmPlayer extends Bitmap
 		return haxe.Timer.stamp() - startTime;
 	}
 	
+	public function elapsedTimeDiff():Float
+	{
+		return getElapsedTime() - fkingElapsed;
+	}
+	
+	public function removePause():Void
+	{
+		lastDecodedVideoFrame2 = 0.0;
+		renderedCount2 = 0;
+	}
+	
 	public function restart()
 	{
 		stop(true);
@@ -112,6 +131,25 @@ class WebmPlayer extends Bitmap
 		hx_webm_decoder_restart(webmDecoder);
 		this.dispatchEvent(new Event(WebmEvent.RESTART));
 		play();
+	}
+	
+	public function changePlaying(isPlay:Bool)
+	{
+		this.dispatchEvent(new Event(WebmEvent.RESTART));
+		if (!isPlay)
+		{
+			playing = false;
+			renderedCount2 = renderedCount;
+			lastDecodedVideoFrame2 = lastDecodedVideoFrame;
+			renderedCount = 0;
+			lastDecodedVideoFrame = 0;
+		} else {
+			renderedCount = renderedCount2;
+			lastDecodedVideoFrame = lastDecodedVideoFrame2;
+			startTime += elapsedTimeDiff();
+			playing = true;
+			dispatchEvent(new WebmEvent(WebmEvent.PLAY));
+		}
 	}
 	
 	public function play()
@@ -156,8 +194,12 @@ class WebmPlayer extends Bitmap
 	
 	function stepVideoFrame()
 	{
+		if (playing)
+		{
+		wasHitOnce = true;
 		var startRenderedCount = renderedCount;
 		var elapsedTime = getElapsedTime ();
+		fkingElapsed = elapsedTime;
 
 		while (hx_webm_decoder_has_more(webmDecoder) && lastDecodedVideoFrame < elapsedTime)
 		{
@@ -171,10 +213,13 @@ class WebmPlayer extends Bitmap
 			dispatchEvent(new WebmEvent(WebmEvent.COMPLETE));
 			stop();
 		}
+		}
 	}
 
 	function decodeVideoFrame(time:Float, data:BytesData)
 	{
+		if (playing)
+		{
 		lastDecodedVideoFrame = time;
 		++renderedCount;
 		
@@ -188,6 +233,9 @@ class WebmPlayer extends Bitmap
 		else
 		{
 			vpxDecoder.getAndRenderFrame(bitmapData);
+		}
+		} else {
+		vpxDecoder.getAndRenderFrame(bitmapData);
 		}
 	}
 	
